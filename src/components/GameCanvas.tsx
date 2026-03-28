@@ -22,6 +22,9 @@ interface GameCanvasProps {
   onMiss: (score: number, missed: number) => void;
   onRestart?: () => void;
   onHome?: () => void;
+  hasMusic?: boolean;
+  isMusicPaused?: boolean;
+  onToggleMusic?: () => void;
 }
 
 const COLORS = ['#FF5252', '#FF4081', '#E040FB', '#7C4DFF', '#536DFE', '#448AFF', '#40C4FF', '#18FFFF', '#64FFDA', '#69F0AE', '#B2FF59', '#EEFF41', '#FFFF00', '#FFD740', '#FFAB40', '#FF6E40'];
@@ -36,7 +39,10 @@ export default function GameCanvas({
   onGameOver,
   onMiss,
   onRestart,
-  onHome
+  onHome,
+  hasMusic,
+  isMusicPaused,
+  onToggleMusic
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [score, setScore] = useState(startingScore);
@@ -295,6 +301,20 @@ export default function GameCanvas({
         </div>
         
         <div className="flex gap-2">
+          {hasMusic && onToggleMusic && (
+            <button 
+              onClick={onToggleMusic}
+              className="pointer-events-auto bg-black/50 hover:bg-white/10 transition-colors backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 text-white"
+              title={isMusicPaused ? "Play Music" : "Pause Music"}
+            >
+              <span className="material-symbols-outlined text-white">
+                {isMusicPaused ? 'play_arrow' : 'pause'}
+              </span>
+              <span className="hidden sm:inline font-medium">
+                {isMusicPaused ? 'Play Music' : 'Pause Music'}
+              </span>
+            </button>
+          )}
           {onHome && (
             <button 
               onClick={onHome}

@@ -71,30 +71,31 @@ export default function App() {
   const [commentary, setCommentary] = useState('');
   const [isGeneratingMusic, setIsGeneratingMusic] = useState(false);
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
+  const [isMusicPaused, setIsMusicPaused] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = 0.5;
+      if (musicUrl) {
+        if (isMusicPaused) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play().catch(console.error);
+        }
+      }
     }
-  }, [musicUrl]);
+  }, [musicUrl, isMusicPaused]);
 
   const handleStartGame = () => {
     setGameState('PLAYING');
     setGameId(prev => prev + 1);
     setCommentary('');
-    if (audioRef.current && musicUrl) {
-      audioRef.current.play().catch(console.error);
-    }
   };
 
   const handleGameOver = (score: number) => {
     setGameState('GAMEOVER');
     setFinalScore(score);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
   };
 
   const handleMiss = async (currentScore: number, missedCount: number) => {
@@ -112,13 +113,16 @@ export default function App() {
 
   const handleGenerateMusic = async () => {
     // @ts-ignore
-    if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
-      try {
-        // @ts-ignore
-        await window.aistudio.openSelectKey();
-      } catch (e) {
-        console.error("Failed to open key selector", e);
-        return;
+    if (typeof window !== 'undefined' && window.aistudio) {
+      // @ts-ignore
+      if (!(await window.aistudio.hasSelectedApiKey())) {
+        try {
+          // @ts-ignore
+          await window.aistudio.openSelectKey();
+        } catch (e) {
+          console.error("Failed to open key selector", e);
+          return;
+        }
       }
     }
 
@@ -129,6 +133,13 @@ export default function App() {
     } else {
       // If it fails, they might need to re-select the key
       console.error("Music generation failed. You may need to select a valid paid API key.");
+      if (typeof window !== 'undefined' && (window as any).aistudio) {
+        try {
+          await (window as any).aistudio.openSelectKey();
+        } catch (e) {
+          console.error("Failed to open key selector after generation failure", e);
+        }
+      }
     }
     setIsGeneratingMusic(false);
   };
@@ -142,7 +153,7 @@ export default function App() {
       )}
 
       {/* Header */}
-      <header className="absolute top-0 left-0 w-full p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center z-10 gap-4">
+      <header className={`absolute top-0 left-0 w-full p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center z-10 gap-4 ${gameState === 'PLAYING' ? 'hidden' : ''}`}>
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-3xl text-primary-400">keyboard</span>
           <h1 className="text-2xl font-bold tracking-tight">TypeDrop</h1>
@@ -155,11 +166,23 @@ export default function App() {
                 <md-circular-progress indeterminate></md-circular-progress>
                 <span>Generating Music...</span>
               </div>
-            ) : (
-              <md-outlined-button onClick={handleGenerateMusic} disabled={!!musicUrl} style={{ whiteSpace: 'nowrap' }}>
-                <md-icon slot="icon">music_note</md-icon>
-                {musicUrl ? 'Music Ready' : 'Generate Kid-Friendly BGM'}
+            ) : musicUrl ? (
+              <md-outlined-button onClick={() => setIsMusicPaused(!isMusicPaused)} style={{ whiteSpace: 'nowrap' }}>
+                <md-icon slot="icon">{isMusicPaused ? 'play_arrow' : 'pause'}</md-icon>
+                {isMusicPaused ? 'Play Music' : 'Pause Music'}
               </md-outlined-button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <md-outlined-button onClick={handleGenerateMusic} style={{ whiteSpace: 'nowrap' }}>
+                  <md-icon slot="icon">music_note</md-icon>
+                  Generate Kid-Friendly BGM
+                </md-outlined-button>
+                {typeof window !== 'undefined' && (window as any).aistudio && (
+                  <md-icon-button onClick={() => (window as any).aistudio.openSelectKey()} title="Set API Key">
+                    <md-icon>key</md-icon>
+                  </md-icon-button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -290,6 +313,9 @@ export default function App() {
                 onMiss={handleMiss}
                 onRestart={handleStartGame}
                 onHome={() => setGameState('MENU')}
+                hasMusic={!!musicUrl}
+                isMusicPaused={isMusicPaused}
+                onToggleMusic={() => setIsMusicPaused(!isMusicPaused)}
               />
               
               {/* AI Commentary Overlay */}
