@@ -45,6 +45,7 @@ export default function GameCanvas({
   onToggleMusic
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hiddenInputRef = useRef<HTMLInputElement>(null);
   const [score, setScore] = useState(startingScore);
   const [missedCount, setMissedCount] = useState(0);
 
@@ -217,60 +218,94 @@ export default function GameCanvas({
     };
   }, [isPlaying, spawnRate, baseSpeed, deductionPoints, wordList, onGameOver, onMiss]);
 
+  // Focus hidden input for mobile keyboard when game starts
+  useEffect(() => {
+    if (isPlaying && hiddenInputRef.current) {
+      hiddenInputRef.current.focus();
+    }
+  }, [isPlaying]);
+
+  const processKey = (key: string) => {
+    if (key.length !== 1 || !/[a-z]/.test(key)) return;
+
+    let activeWord = gameState.current.words.find(w => w.id === gameState.current.activeWordId);
+
+    if (activeWord) {
+      const nextChar = activeWord.text[activeWord.typed.length].toLowerCase();
+      if (key === nextChar) {
+        activeWord.typed += activeWord.text[activeWord.typed.length];
+        audioService.playHitSound();
+        
+        if (activeWord.typed === activeWord.text) {
+          // Word finished!
+          gameState.current.score += activeWord.text.length * 2;
+          setScore(gameState.current.score);
+          gameState.current.words = gameState.current.words.filter(w => w.id !== activeWord.id);
+          gameState.current.activeWordId = null;
+        }
+      }
+    } else {
+      // Find the lowest word that starts with this key
+      let targetWord: FallingWord | null = null;
+      let maxY = -Infinity;
+
+      gameState.current.words.forEach((word) => {
+        if (word.text[0].toLowerCase() === key && word.y > maxY) {
+          maxY = word.y;
+          targetWord = word;
+        }
+      });
+
+      if (targetWord) {
+        targetWord.typed = targetWord.text[0];
+        gameState.current.activeWordId = targetWord.id;
+        audioService.playHitSound();
+        
+        if (targetWord.typed === targetWord.text) {
+          gameState.current.score += 2;
+          setScore(gameState.current.score);
+          gameState.current.words = gameState.current.words.filter(w => w.id !== targetWord!.id);
+          gameState.current.activeWordId = null;
+        }
+      }
+    }
+  };
+
   // Handle keyboard input
   useEffect(() => {
     if (!isPlaying) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If the hidden input is focused, let the onChange handler deal with it
+      // This prevents double-firing on desktop and handles mobile predictive text better
+      if (document.activeElement === hiddenInputRef.current) return;
+      
       const key = e.key.toLowerCase();
-      if (key.length !== 1 || !/[a-z]/.test(key)) return;
-
-      let activeWord = gameState.current.words.find(w => w.id === gameState.current.activeWordId);
-
-      if (activeWord) {
-        const nextChar = activeWord.text[activeWord.typed.length].toLowerCase();
-        if (key === nextChar) {
-          activeWord.typed += activeWord.text[activeWord.typed.length];
-          audioService.playHitSound();
-          
-          if (activeWord.typed === activeWord.text) {
-            // Word finished!
-            gameState.current.score += activeWord.text.length * 2;
-            setScore(gameState.current.score);
-            gameState.current.words = gameState.current.words.filter(w => w.id !== activeWord.id);
-            gameState.current.activeWordId = null;
-          }
-        }
-      } else {
-        // Find the lowest word that starts with this key
-        let targetWord: FallingWord | null = null;
-        let maxY = -Infinity;
-
-        gameState.current.words.forEach((word) => {
-          if (word.text[0].toLowerCase() === key && word.y > maxY) {
-            maxY = word.y;
-            targetWord = word;
-          }
-        });
-
-        if (targetWord) {
-          targetWord.typed = targetWord.text[0];
-          gameState.current.activeWordId = targetWord.id;
-          audioService.playHitSound();
-          
-          if (targetWord.typed === targetWord.text) {
-            gameState.current.score += 2;
-            setScore(gameState.current.score);
-            gameState.current.words = gameState.current.words.filter(w => w.id !== targetWord!.id);
-            gameState.current.activeWordId = null;
-          }
-        }
-      }
+      processKey(key);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying]);
+
+  const handleMobileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    
+    // Process all new characters
+    for (const char of val) {
+      processKey(char.toLowerCase());
+    }
+    
+    // Reset input so it's ready for the next keystroke
+    e.target.value = '';
+  };
+
+  const handleContainerClick = () => {
+    if (isPlaying && hiddenInputRef.current) {
+      hiddenInputRef.current.focus();
+    }
+  };
 
   // Handle resize
   useEffect(() => {
@@ -290,7 +325,22 @@ export default function GameCanvas({
   }, []);
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+    <div 
+      className="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border border-gray-800 cursor-text"
+      onClick={handleContainerClick}
+    >
+      {/* Hidden input to force mobile keyboard to appear */}
+      <input 
+        ref={hiddenInputRef}
+        type="text"
+        className="absolute opacity-0 w-0 h-0 -z-10"
+        onChange={handleMobileInput}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck="false"
+      />
+      
       <canvas ref={canvasRef} className="block w-full h-full" />
       
       {/* HUD */}
