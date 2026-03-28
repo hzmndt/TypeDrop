@@ -1,0 +1,5 @@
+{
+  "name": "TypeDrop",
+  "description": "A responsive typing game with falling letters, dynamic difficulty, and AI-generated music and commentary.",
+  "requestFramePermissions": []
+}
